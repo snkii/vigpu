@@ -1,0 +1,293 @@
+name: release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: vigpu-release
+  cancel-in-progress: false
+
+jobs:
+  package:
+    if: github.event_name == 'push'
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: write
+      attestations: write
+      artifact-metadata: write
+      id-token: write
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v6
+
+      - name: Install stable Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Build Linux binaries and Debian package
+        run: |
+          cargo install cargo-deb --version 3.8.0 --locked
+          cargo build --release --locked
+          cargo deb --no-build
+          mkdir -p dist/linux
+          cp target/debian/*.deb dist/
+          cp target/release/vigpu dist/linux/vigpu
+          tar -C dist/linux -czf dist/vigpu-linux-x64.tar.gz vigpu
+          (cd dist && sha256sum *.deb *.tar.gz > SHA256SUMS)
+
+      - name: Attest Debian package provenance
+        uses: actions/attest@v4
+        with:
+          subject-path: 'dist/*.deb'
+
+      - name: Upload Debian package for repository publishing
+        uses: actions/upload-artifact@v4
+        with:
+          name: vigpu-deb
+          path: dist/*.deb
+          if-no-files-found: error
+
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" dist/* --verify-tag --title "ViGPU $GITHUB_REF_NAME" --generate-notes
+
+  package-windows:
+    if: github.event_name == 'push'
+    needs: package
+    runs-on: windows-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v6
+
+      - name: Install stable Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Build and package Windows x64 binary
+        shell: pwsh
+        run: |
+          cargo build --release --locked
+          New-Item -ItemType Directory -Path dist, package -Force | Out-Null
+          Copy-Item target/release/vigpu.exe, LICENSE-MIT, LICENSE-APACHE, THEME_CREDITS.md package/
+          Compress-Archive -Path package/* `
+            -DestinationPath dist/vigpu-windows-x64.zip
+          Get-FileHash dist/vigpu-windows-x64.zip -Algorithm SHA256 |
+            ForEach-Object { "$($_.Hash.ToLower())  vigpu-windows-x64.zip" } |
+            Set-Content dist/SHA256SUMS-windows
+
+      - name: Upload Windows release assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: pwsh
+        run: gh release upload "$env:GITHUB_REF_NAME" dist/vigpu-windows-x64.zip dist/SHA256SUMS-windows --clobber
+
+  package-macos:
+    if: github.event_name == 'push'
+    needs: package
+    runs-on: macos-14
+    permissions:
+      contents: write
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v6
+
+      - name: Install stable Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin
+
+      - name: Build and package Apple Silicon binary
+        run: |
+          cargo build --release --locked --target aarch64-apple-darwin
+          mkdir -p dist/macos
+          cp target/aarch64-apple-darwin/release/vigpu dist/macos/vigpu
+          tar -C dist/macos -czf dist/vigpu-macos-arm64.tar.gz vigpu
+          shasum -a 256 dist/vigpu-macos-arm64.tar.gz | awk '{ print $1 "  vigpu-macos-arm64.tar.gz" }' > dist/SHA256SUMS-macos
+          version="${GITHUB_REF_NAME#v}"
+          checksum="$(awk '{ print $1 }' dist/SHA256SUMS-macos)"
+          sed -e "s/@VERSION@/$version/g" -e "s/@SHA256@/$checksum/g" Formula/vigpu.rb.in > dist/vigpu.rb
+
+      - name: Upload macOS release assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "$GITHUB_REF_NAME" dist/vigpu-macos-arm64.tar.gz dist/vigpu.rb dist/SHA256SUMS-macos --clobber
+
+  publish-apt:
+    needs: [package, package-windows, package-macos]
+    if: always() && ((needs.package.result == 'success' && needs.package-windows.result == 'success' && needs.package-macos.result == 'success') || github.event_name == 'workflow_dispatch')
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v6
+
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v5
+
+      - name: Download Debian package from this release
+        if: github.event_name == 'push'
+        uses: actions/download-artifact@v5
+        with:
+          name: vigpu-deb
+          path: dist
+
+      - name: Download latest release assets for site refresh
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p dist
+          gh release download --repo "$GITHUB_REPOSITORY" --pattern 'vigpu_*_amd64.deb' --dir dist
+          gh release download --repo "$GITHUB_REPOSITORY" --pattern 'vigpu.rb' --dir dist
+
+      - name: Download Homebrew formula for site publishing
+        if: github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release download "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --pattern 'vigpu.rb' --dir dist
+
+      - name: Prepare installer files
+        run: |
+          mkdir -p public
+          cp install.sh install.ps1 public/
+          if [ -f dist/vigpu.rb ]; then cp dist/vigpu.rb public/; fi
+
+      - name: Build signed APT repository and install page
+        env:
+          APT_GPG_PRIVATE_KEY: ${{ secrets.APT_GPG_PRIVATE_KEY }}
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes apt-utils gnupg
+          printf '%s' "$APT_GPG_PRIVATE_KEY" | gpg --batch --import
+          KEY_FINGERPRINT="$(gpg --batch --with-colons --list-secret-keys | awk -F: '$1 == "fpr" { print $10; exit }')"
+          test -n "$KEY_FINGERPRINT"
+          mkdir -p public/pool/main public/dists/stable/main/binary-amd64
+          cp dist/*.deb public/pool/main/
+          cp apt/vigpu-archive-keyring.asc public/
+          cat > public/index.html <<'EOF'
+          <!doctype html>
+          <html lang="en">
+          <head>
+          <meta charset="utf-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1">
+          <meta name="description" content="Install ViGPU, a simple Rust TUI dashboard for NVIDIA GPU monitoring on Linux and Apple Silicon.">
+          <meta name="robots" content="index,follow">
+          <link rel="canonical" href="https://seon.uk/vigpu/">
+          <title>ViGPU — Simple GPU Monitor</title>
+          <style>
+            :root { color-scheme: dark; font-family: system-ui, sans-serif; background: #282828; color: #ebdbb2; }
+            * { box-sizing: border-box; }
+            body { max-width: 760px; margin: 0 auto; padding: clamp(1.25rem, 6vw, 3.5rem) clamp(1rem, 5vw, 2rem); line-height: 1.6; }
+            h1 { margin: 0 0 .25rem; font-size: clamp(2rem, 8vw, 3rem); }
+            .logo { color: #fabd2f; font: 600 1rem/1.4 ui-monospace, monospace; letter-spacing: .04em; }
+            p { color: #d5c4a1; }
+            h2 { margin: 2rem 0 .75rem; font-size: 1.15rem; }
+            pre { margin: 0; padding: 1rem; overflow: auto; border: 1px solid #504945; border-radius: 8px; background: #1d2021; color: #ebdbb2; font: .9rem/1.65 ui-monospace, SFMono-Regular, Consolas, monospace; white-space: pre-wrap; overflow-wrap: anywhere; }
+            code { font: inherit; }
+            a { color: #83a598; }
+            a:hover { color: #b8bb26; }
+            .links { margin-top: 1.5rem; }
+          </style>
+          </head>
+          <body>
+          <header>
+            <h1>ViGPU</h1>
+            <div class="logo">▰▱ ViGPU</div>
+            <p>A simple Rust TUI dashboard for NVIDIA GPU monitoring.</p>
+          </header>
+          <main>
+          <h2>Debian or Ubuntu (system-wide)</h2>
+          <pre><code>sudo install -d -m 0755 /etc/apt/keyrings
+          curl -fsSL https://seon.uk/vigpu/vigpu-archive-keyring.asc | sudo gpg --dearmor -o /etc/apt/keyrings/vigpu.gpg
+          echo "deb [arch=amd64 signed-by=/etc/apt/keyrings/vigpu.gpg] https://seon.uk/vigpu stable main" | sudo tee /etc/apt/sources.list.d/vigpu.list
+          sudo apt update &amp;&amp; sudo apt install vigpu
+          vigpu</code></pre>
+          <h2>Linux (no sudo, no Rust)</h2>
+          <pre><code>curl -fsSL https://seon.uk/vigpu/install.sh | sh
+          export PATH="$HOME/.local/bin:$PATH"
+          vigpu</code></pre>
+          <p>The user installer downloads a prebuilt x86_64 binary. If ViGPU is not found in a new terminal, add the PATH line to your shell profile and reopen the terminal.</p>
+          <h2>Windows PowerShell</h2>
+          <pre><code>irm https://seon.uk/vigpu/install.ps1 | iex
+          vigpu</code></pre>
+          <p>If Windows cannot find <code>vigpu</code>, open a new PowerShell window. An NVIDIA driver is required.</p>
+          <h2>macOS (Apple Silicon)</h2>
+          <pre><code>brew install --formula https://seon.uk/vigpu/vigpu.rb
+          vigpu</code></pre>
+          <p>Apple GPU metrics use unified system memory. Per-process GPU readings are unavailable. Intel Macs are not currently supported.</p>
+          <h2>Update</h2>
+          <p>Run the matching command again to replace your user-installed binary with the latest release:</p>
+          <pre><code>Linux without sudo: curl -fsSL https://seon.uk/vigpu/install.sh | sh
+          Windows: irm https://seon.uk/vigpu/install.ps1 | iex
+          Apple Silicon: brew reinstall --formula https://seon.uk/vigpu/vigpu.rb
+          Debian or Ubuntu: sudo apt update &amp;&amp; sudo apt upgrade vigpu
+          Check version: vigpu --version</code></pre>
+          <p class="links"><a href="https://github.com/snkii/vigpu">Source, releases, and documentation</a> · <a href="llms.txt">Agent and AI documentation</a></p>
+          </main>
+          </body>
+          </html>
+          EOF
+          cat > public/llms.txt <<'EOF'
+          # ViGPU
+
+          ViGPU is a simple Rust terminal dashboard for NVIDIA GPU monitoring. It presents live GPU utilization, VRAM, power, temperature, fan speed, and GPU process details.
+
+          - Project: https://github.com/snkii/vigpu
+          - Install and docs: https://seon.uk/vigpu/
+          - Releases: https://github.com/snkii/vigpu/releases
+          - Supported systems: Linux x86_64 and Windows x64 with NVIDIA drivers; Apple Silicon macOS for device telemetry.
+          - Linux user install (no sudo or Rust): `curl -fsSL https://seon.uk/vigpu/install.sh | sh`
+          - Windows install: `irm https://seon.uk/vigpu/install.ps1 | iex`
+          - Apple Silicon Homebrew install: `brew install --formula https://seon.uk/vigpu/vigpu.rb`
+          - Linux user update: `curl -fsSL https://seon.uk/vigpu/install.sh | sh`
+          - Windows update: `irm https://seon.uk/vigpu/install.ps1 | iex`
+          - Apple Silicon update: `brew reinstall --formula https://seon.uk/vigpu/vigpu.rb`
+          - Debian or Ubuntu update: `sudo apt update && sudo apt upgrade vigpu`
+          EOF
+          cat > public/robots.txt <<'EOF'
+          User-agent: *
+          Allow: /
+          Sitemap: https://seon.uk/vigpu/sitemap.xml
+          EOF
+          cat > public/sitemap.xml <<'EOF'
+          <?xml version="1.0" encoding="UTF-8"?>
+          <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+            <url><loc>https://seon.uk/vigpu/</loc></url>
+          </urlset>
+          EOF
+          cd public
+          apt-ftparchive packages pool/main > dists/stable/main/binary-amd64/Packages
+          gzip -n -9 -c dists/stable/main/binary-amd64/Packages > dists/stable/main/binary-amd64/Packages.gz
+          apt-ftparchive \
+            -o APT::FTPArchive::Release::Origin="ViGPU" \
+            -o APT::FTPArchive::Release::Label="ViGPU" \
+            -o APT::FTPArchive::Release::Suite="stable" \
+            -o APT::FTPArchive::Release::Codename="stable" \
+            -o APT::FTPArchive::Release::Architectures="amd64" \
+            -o APT::FTPArchive::Release::Components="main" \
+            -o APT::FTPArchive::Release::Description="ViGPU NVIDIA GPU monitor packages" \
+            release dists/stable > dists/stable/Release
+          gpg --batch --yes --local-user "$KEY_FINGERPRINT" --clearsign --output dists/stable/InRelease dists/stable/Release
+          gpg --batch --yes --local-user "$KEY_FINGERPRINT" --armor --detach-sign --output dists/stable/Release.gpg dists/stable/Release
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: public
+
+      - name: Deploy APT repository and installers
+        id: deployment
+        uses: actions/deploy-pages@v4

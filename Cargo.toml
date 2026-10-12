@@ -1,0 +1,48 @@
+[package]
+name = "vigpu"
+version = "0.1.0"
+edition = "2021"
+description = "A simple terminal dashboard for NVIDIA GPU monitoring"
+repository = "https://github.com/snkii/vigpu"
+homepage = "https://github.com/snkii/vigpu"
+authors = ["Seonuk Kim <iamseonuk@gmail.com>"]
+license = "MIT OR Apache-2.0"
+readme = "README.md"
+keywords = ["gpu", "nvidia", "tui", "monitor", "dashboard"]
+categories = ["command-line-utilities"]
+
+[dependencies]
+ratatui = "0.30.2"
+crossterm = "0.29"
+unicode-segmentation = "1.12"
+unicode-width = "0.2"
+
+[target.'cfg(target_os = "linux")'.dependencies]
+libc = "0.2"
+
+[target.'cfg(any(target_os = "linux", target_os = "windows"))'.dependencies]
+nvml-wrapper = "0.13"
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_System_Threading"] }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+macmon = { version = "0.9", default-features = false }
+
+[package.metadata.deb]
+section = "utils"
+priority = "optional"
+copyright = "2026, Seonuk Kim"
+extended-description = "A simple terminal dashboard for NVIDIA GPU monitoring."
+depends = "$auto"
+assets = [
+    ["target/release/vigpu", "usr/bin/", "755"],
+    ["LICENSE-MIT", "usr/share/doc/vigpu/LICENSE-MIT", "644"],
+    ["LICENSE-APACHE", "usr/share/doc/vigpu/LICENSE-APACHE", "644"],
+    ["THEME_CREDITS.md", "usr/share/doc/vigpu/THEME_CREDITS.md", "644"],
+]
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
+strip = true
