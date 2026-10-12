@@ -1,0 +1,41 @@
+name: Bug report
+description: Report a reproducible problem in ViGPU.
+title: "bug: "
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: Please check existing issues and avoid including secrets or private system data.
+  - type: input
+    id: version
+    attributes:
+      label: ViGPU version
+      placeholder: 0.1.0
+    validations:
+      required: true
+  - type: input
+    id: platform
+    attributes:
+      label: Linux distribution and terminal
+      placeholder: Ubuntu 24.04, GNOME Terminal
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce
+      description: Include terminal width and height for display issues.
+    validations:
+      required: true
