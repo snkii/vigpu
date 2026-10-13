@@ -44,6 +44,7 @@ If `vigpu` is not found, open a new PowerShell window. An NVIDIA driver is requi
 ### macOS on Apple Silicon
 
 ```sh
+brew tap snkii/vigpu https://github.com/snkii/vigpu.git
 brew install snkii/vigpu/vigpu
 vigpu
 ```

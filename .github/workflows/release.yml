@@ -267,7 +267,8 @@ jobs:
           vigpu</code></pre>
           <p>If Windows cannot find <code>vigpu</code>, open a new PowerShell window. An NVIDIA driver is required.</p>
           <h2>macOS (Apple Silicon)</h2>
-          <pre><code>brew install snkii/vigpu/vigpu
+          <pre><code>brew tap snkii/vigpu https://github.com/snkii/vigpu.git
+          brew install snkii/vigpu/vigpu
           vigpu</code></pre>
           <p>Apple GPU metrics use unified system memory. Per-process GPU readings are unavailable. Intel Macs are not currently supported.</p>
           <h2>Update</h2>
@@ -288,7 +289,7 @@ jobs:
           - Supported systems: Linux x86_64 and Windows x64 with NVIDIA drivers; Apple Silicon macOS for device telemetry.
           - Linux user install (no sudo or Rust): `curl -fsSL https://seon.uk/vigpu/install.sh | sh`
           - Windows install: `irm https://seon.uk/vigpu/install.ps1 | iex`
-          - Apple Silicon Homebrew install: `brew install snkii/vigpu/vigpu`
+          - Apple Silicon Homebrew install: `brew tap snkii/vigpu https://github.com/snkii/vigpu.git` then `brew install snkii/vigpu/vigpu`
           - Updates: ViGPU checks published binary asset digests at startup, verifies changed downloads, and applies them after the app exits. Network failures are silent and do not block use. Use `--no-update` or set `VIGPU_NO_UPDATE=1` to disable checks.
           EOF
           cat > public/robots.txt <<'EOF'
