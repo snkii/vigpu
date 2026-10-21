@@ -1,8 +1,8 @@
 class Vigpu < Formula
   desc "A simple, pretty GPU monitoring TUI"
   homepage "https://seon.uk/vigpu/"
-  url "https://github.com/snkii/vigpu/releases/download/v0.1.0/vigpu-macos-arm64.tar"
-  sha256 "0feca776cf2ca429464e75e2e21b53c30d730d3ac392f5c08b11980780f0d5e5"
+  url "https://github.com/snkii/vigpu/releases/download/v0.1.1/vigpu-macos-arm64.tar"
+  sha256 "a80849436814409abf72484fc8932d15ea2ef8ead60b5786962a4cc02fe31ef4"
   license any_of: ["MIT", "Apache-2.0"]
 
   depends_on arch: :arm64
