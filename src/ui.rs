@@ -358,11 +358,10 @@ impl Theme {
         }
     }
 
-    fn glow(self, brightness: f64) -> Color {
-        let rgb = self
-            .glow_rgb
-            .map(|channel| (channel as f64 * brightness).round().clamp(0.0, 255.0) as u8);
-        mapped_color(rgb, self.depth)
+    // Lift the text color toward white rather than scaling it, so the wordmark
+    // keeps the same hue as the rest of the text at rest.
+    fn glow(self, amount: f64) -> Color {
+        mapped_color(self.blend_rgb(self.glow_rgb, [255, 255, 255], amount), self.depth)
     }
 
     fn heat(self, percent: f64) -> Color {
@@ -1075,11 +1074,11 @@ fn wordmark_line(theme: Theme, elapsed: std::time::Duration) -> Line<'static> {
     ];
     spans.extend("ViGPU".chars().enumerate().map(|(index, glyph)| {
         let distance = index as f64 - phase;
-        let brightness = 0.68 + 0.58 * (-distance * distance / 1.25).exp();
+        let amount = 0.6 * (-distance * distance / 1.25).exp();
         Span::styled(
             glyph.to_string(),
             Style::default()
-                .fg(theme.glow(brightness))
+                .fg(theme.glow(amount))
                 .add_modifier(Modifier::BOLD),
         )
     }));
