@@ -67,7 +67,7 @@ impl ThemeName {
 
     pub fn label(self) -> &'static str {
         match self {
-            Self::ViGpuDefault => "ViGPU Default (Gruvbox)",
+            Self::ViGpuDefault => "ViGPU Default",
             Self::Alucard => "Alucard",
             Self::AyuMirage => "Ayu Mirage",
             Self::Catppuccin => "Catppuccin Mocha",
@@ -158,17 +158,19 @@ impl Theme {
             4
         };
         let palette: [[u8; 3]; 10] = match name {
+            // Every value is an exact xterm-256 palette entry, so truecolor and
+            // 256-color terminals draw the same colors.
             ThemeName::ViGpuDefault => [
-                [40, 40, 40],
-                [50, 48, 47],
-                [80, 73, 69],
-                [235, 235, 230],
-                [168, 153, 132],
-                [250, 189, 47],
-                [142, 192, 124],
-                [184, 187, 38],
-                [251, 73, 52],
-                [211, 134, 155],
+                [38, 38, 38],
+                [48, 48, 48],
+                [88, 88, 88],
+                [228, 228, 228],
+                [158, 158, 158],
+                [255, 215, 95],
+                [95, 215, 215],
+                [135, 215, 135],
+                [255, 95, 95],
+                [215, 135, 215],
             ],
             ThemeName::Nord => [
                 [46, 52, 64],
@@ -394,11 +396,19 @@ fn mapped_color([r, g, b]: [u8; 3], depth: u8) -> Color {
     match depth {
         24 => Color::Rgb(r, g, b),
         8 => {
-            let cube = |v: u8| ((v as f64 / 255.0 * 5.0).round() as u8).min(5);
+            // xterm cube levels are 0, 95, 135, 175, 215, 255 and the gray ramp
+            // is 8 + 10n, so pick the nearest level rather than a linear step.
+            let cube = |v: u8| match v {
+                0..=47 => 0,
+                48..=114 => 1,
+                115..=154 => 2,
+                155..=194 => 3,
+                195..=234 => 4,
+                _ => 5,
+            };
             let cube_index = 16 + 36 * cube(r) + 6 * cube(g) + cube(b);
             let gray = ((r as u16 + g as u16 + b as u16) / 3) as u8;
-            let gray_index =
-                232 + ((gray.saturating_sub(8) as f64 / 247.0 * 24.0).round() as u8).min(23);
+            let gray_index = 232 + ((gray.saturating_sub(3) / 10) as u8).min(23);
             let cube_rgb = [r, g, b].map(|v| {
                 let n = cube(v);
                 if n == 0 {

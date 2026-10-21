@@ -2,11 +2,10 @@
 
 The palettes below are mapped from the listed upstream projects into ViGPU's dashboard roles. ViGPU does not include upstream theme implementation code.
 
-ViGPU Default (Gruvbox) is ViGPU's established Gruvbox-based palette, presented as a single theme.
+ViGPU Default uses ViGPU's own palette, built from exact xterm-256 colors so it looks the same in truecolor and 256-color terminals.
 
 | Theme | Palette source | License |
 | --- | --- | --- |
-| ViGPU Default (Gruvbox) | [morhetz/gruvbox palette](https://github.com/morhetz/gruvbox/blob/master/colors/gruvbox.vim) | MIT/X11; see the upstream [license terms](https://github.com/morhetz/gruvbox#license) |
 | Alucard | [dracula/dracula-theme](https://github.com/dracula/dracula-theme) | MIT; see the [license](https://github.com/dracula/dracula-theme/blob/main/LICENSE) |
 | Ayu Mirage | [ayu-theme/vscode-ayu palette](https://github.com/ayu-theme/vscode-ayu/blob/master/ayu-mirage.json) | MIT; see the [license](https://github.com/ayu-theme/vscode-ayu/blob/master/LICENSE) |
 | Catppuccin Mocha | [catppuccin palette guide](https://github.com/catppuccin/catppuccin/blob/main/docs/style-guide.md) | MIT; see the [license](https://github.com/catppuccin/catppuccin/blob/main/LICENSE) |
