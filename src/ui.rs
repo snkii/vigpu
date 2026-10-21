@@ -358,11 +358,12 @@ impl Theme {
         }
     }
 
-    // Shimmer from the text color toward the theme's yellow. Dimming the warm
-    // text reads as olive and lifting it toward white washes it out; staying
-    // between the two warm colors keeps the wordmark in the same family.
+    // Shimmer by raising only the HSL lightness of the text color, keeping its
+    // hue and saturation. Scaling RGB or blending toward white shifts the hue.
     fn glow(self, amount: f64) -> Color {
-        mapped_color(self.blend_rgb(self.glow_rgb, self.yellow_rgb, amount), self.depth)
+        let (hue, saturation, lightness) = rgb_to_hsl(self.glow_rgb);
+        let lightness = lightness + (1.0 - lightness) * amount.clamp(0.0, 1.0);
+        mapped_color(hsl_to_rgb(hue, saturation, lightness), self.depth)
     }
 
     fn heat(self, percent: f64) -> Color {
@@ -388,6 +389,41 @@ impl Theme {
         });
         rgb
     }
+}
+
+fn rgb_to_hsl(rgb: [u8; 3]) -> (f64, f64, f64) {
+    let [r, g, b] = rgb.map(|channel| channel as f64 / 255.0);
+    let max = r.max(g).max(b);
+    let min = r.min(g).min(b);
+    let lightness = (max + min) / 2.0;
+    let delta = max - min;
+    if delta == 0.0 {
+        return (0.0, 0.0, lightness);
+    }
+    let saturation = delta / (1.0 - (2.0 * lightness - 1.0).abs());
+    let hue = if max == r {
+        ((g - b) / delta).rem_euclid(6.0)
+    } else if max == g {
+        (b - r) / delta + 2.0
+    } else {
+        (r - g) / delta + 4.0
+    } * 60.0;
+    (hue, saturation, lightness)
+}
+
+fn hsl_to_rgb(hue: f64, saturation: f64, lightness: f64) -> [u8; 3] {
+    let chroma = (1.0 - (2.0 * lightness - 1.0).abs()) * saturation;
+    let x = chroma * (1.0 - ((hue / 60.0).rem_euclid(2.0) - 1.0).abs());
+    let (r, g, b) = match (hue / 60.0) as u8 {
+        0 => (chroma, x, 0.0),
+        1 => (x, chroma, 0.0),
+        2 => (0.0, chroma, x),
+        3 => (0.0, x, chroma),
+        4 => (x, 0.0, chroma),
+        _ => (chroma, 0.0, x),
+    };
+    let offset = lightness - chroma / 2.0;
+    [r, g, b].map(|channel| ((channel + offset) * 255.0).round().clamp(0.0, 255.0) as u8)
 }
 
 fn mapped_color([r, g, b]: [u8; 3], depth: u8) -> Color {
@@ -1075,7 +1111,7 @@ fn wordmark_line(theme: Theme, elapsed: std::time::Duration) -> Line<'static> {
     ];
     spans.extend("ViGPU".chars().enumerate().map(|(index, glyph)| {
         let distance = index as f64 - phase;
-        let amount = 0.8 * (-distance * distance / 1.25).exp();
+        let amount = 0.85 * (-distance * distance / 1.25).exp();
         Span::styled(
             glyph.to_string(),
             Style::default()
