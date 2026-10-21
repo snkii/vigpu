@@ -1,6 +1,6 @@
 [package]
 name = "vigpu"
-version = "0.1.1"
+version = "0.1.2"
 edition = "2021"
 description = "A simple, pretty GPU monitoring TUI"
 repository = "https://github.com/snkii/vigpu"

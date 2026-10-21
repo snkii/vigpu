@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.2
+
+- Use a neutral off-white for the default theme's text, which no longer turns peach in 256-color terminals.
+- Keep a single column of cards until the terminal is 120 cells wide.
+
 ## 0.1.1
 
 - Leave the screen background to the terminal by default, so translucent or blurred terminal windows show through. Set `transparent=false` in the config file to restore the solid theme fill.
