@@ -44,6 +44,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let mut app = AppState::new();
     app.set_snapshot(first);
     app.notes = config::load_notes();
+    ui::set_transparent(config::load_transparent());
     let mut theme_name = config::load_theme();
     let mut theme = ui::Theme::from_name(theme_name);
     let mut menu: Option<(ThemeName, usize)> = None;

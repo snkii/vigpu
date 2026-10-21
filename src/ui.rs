@@ -1,6 +1,6 @@
 // ViGPU — Seonuk Kim, Human Interface Laboratory, Seoul National University (2026-10-12)
 // SPDX-License-Identifier: MIT OR Apache-2.0
-use std::env;
+use std::{env, sync::OnceLock};
 use unicode_segmentation::UnicodeSegmentation;
 use unicode_width::UnicodeWidthStr;
 
@@ -135,6 +135,12 @@ pub struct Theme {
     green_rgb: [u8; 3],
     red_rgb: [u8; 3],
     depth: u8,
+}
+
+static TRANSPARENT: OnceLock<bool> = OnceLock::new();
+
+pub fn set_transparent(enabled: bool) {
+    let _ = TRANSPARENT.set(enabled);
 }
 
 impl Theme {
@@ -334,8 +340,9 @@ impl Theme {
             ],
         };
         let color = |index| mapped_color(palette[index], depth);
+        let transparent = TRANSPARENT.get().copied().unwrap_or(true);
         Self {
-            bg: color(0),
+            bg: if transparent { Color::Reset } else { color(0) },
             panel: color(1),
             border: color(2),
             text: color(3),

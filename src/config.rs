@@ -55,11 +55,36 @@ pub fn load_theme() -> ThemeName {
         .unwrap_or(ThemeName::ViGpuDefault)
 }
 
+// The screen background is left to the terminal by default, so translucent or
+// blurred terminal windows show through. `transparent=false` restores the solid
+// theme fill.
+pub fn load_transparent() -> bool {
+    path()
+        .and_then(|path| fs::read_to_string(path).ok())
+        .and_then(|contents| {
+            contents.lines().find_map(|line| {
+                line.trim()
+                    .strip_prefix("transparent=")
+                    .map(|value| !matches!(value.trim(), "false" | "0" | "no" | "off"))
+            })
+        })
+        .unwrap_or(true)
+}
+
 pub fn save_theme(theme: ThemeName) -> io::Result<()> {
     let path =
         path().ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, "No config directory"))?;
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent)?;
     }
-    fs::write(path, format!("theme={}\n", theme.slug()))
+    let mut contents = format!("theme={}\n", theme.slug());
+    if let Ok(existing) = fs::read_to_string(&path) {
+        for line in existing.lines() {
+            if !line.trim().is_empty() && !line.trim().starts_with("theme=") {
+                contents.push_str(line);
+                contents.push('\n');
+            }
+        }
+    }
+    fs::write(path, contents)
 }
