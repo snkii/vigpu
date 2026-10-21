@@ -358,10 +358,11 @@ impl Theme {
         }
     }
 
-    // Lift the text color toward white rather than scaling it, so the wordmark
-    // keeps the same hue as the rest of the text at rest.
+    // Shimmer from the text color toward the theme's yellow. Dimming the warm
+    // text reads as olive and lifting it toward white washes it out; staying
+    // between the two warm colors keeps the wordmark in the same family.
     fn glow(self, amount: f64) -> Color {
-        mapped_color(self.blend_rgb(self.glow_rgb, [255, 255, 255], amount), self.depth)
+        mapped_color(self.blend_rgb(self.glow_rgb, self.yellow_rgb, amount), self.depth)
     }
 
     fn heat(self, percent: f64) -> Color {
@@ -1074,7 +1075,7 @@ fn wordmark_line(theme: Theme, elapsed: std::time::Duration) -> Line<'static> {
     ];
     spans.extend("ViGPU".chars().enumerate().map(|(index, glyph)| {
         let distance = index as f64 - phase;
-        let amount = 0.6 * (-distance * distance / 1.25).exp();
+        let amount = 0.8 * (-distance * distance / 1.25).exp();
         Span::styled(
             glyph.to_string(),
             Style::default()
