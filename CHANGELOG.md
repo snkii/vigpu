@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.3
+
+- Rename the default theme to "ViGPU Default" and give it its own palette of exact xterm-256 colors, so it looks the same in truecolor and 256-color terminals.
+- Fix 256-color mapping to use the real xterm cube levels and gray ramp, so every theme lands on its nearest color.
+
 ## 0.1.2
 
 - Use a neutral off-white for the default theme's text, which no longer turns peach in 256-color terminals.
