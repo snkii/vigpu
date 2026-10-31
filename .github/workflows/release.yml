@@ -181,7 +181,7 @@ jobs:
 
       - name: Download Debian package from this release
         if: github.event_name == 'push'
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v8
         with:
           name: vigpu-deb
           path: dist
