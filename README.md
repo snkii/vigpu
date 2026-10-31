@@ -53,6 +53,8 @@ ViGPU quietly checks the published platform binary each time it starts. It detec
 
 To skip the background update check for one run, use `vigpu --no-update`. Set `VIGPU_NO_UPDATE=1` to disable checks by default (`$env:VIGPU_NO_UPDATE = "1"` in PowerShell). Remove the variable or set it to `0` to re-enable checks.
 
+On shared machines, `vigpu --only-visible` shows only the GPUs listed in `CUDA_VISIBLE_DEVICES`, plus the processes running on them. Entries can be indices or `GPU-` UUIDs; indices are the ones `nvidia-smi` shows. Set `VIGPU_ONLY_VISIBLE=1` to make this the default. When `CUDA_VISIBLE_DEVICES` is unset, every GPU is shown.
+
 ## License
 
 ViGPU is available under either the [MIT License](LICENSE-MIT) or [Apache License, Version 2.0](LICENSE-APACHE).

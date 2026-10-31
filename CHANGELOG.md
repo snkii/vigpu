@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.4
+
+- Add `--only-visible` to show only the GPUs in `CUDA_VISIBLE_DEVICES` and their processes. Set `VIGPU_ONLY_VISIBLE=1` to turn it on by default.
+
 ## 0.1.3
 
 - Rename the default theme to "ViGPU Default" and give it its own palette of exact xterm-256 colors, so it looks the same in truecolor and 256-color terminals.

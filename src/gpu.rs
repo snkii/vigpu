@@ -44,6 +44,7 @@ pub struct Snapshot {
 #[cfg(not(target_os = "macos"))]
 pub struct Collector {
     nvml: Nvml,
+    visible: Option<Vec<u32>>,
     previous_process_ticks: HashMap<u32, u64>,
     previous_sample: Option<Instant>,
     clock_ticks_per_second: Option<f64>,
@@ -56,10 +57,18 @@ pub struct Collector {
 
 #[cfg(not(target_os = "macos"))]
 impl Collector {
-    pub fn new() -> Result<Self, String> {
+    pub fn new(only_visible: bool) -> Result<Self, String> {
         let nvml = Nvml::init().map_err(|error| format!("NVML initialization failed: {error}"))?;
+        let visible = if only_visible {
+            std::env::var("CUDA_VISIBLE_DEVICES")
+                .ok()
+                .map(|value| visible_indices(&nvml, &value))
+        } else {
+            None
+        };
         Ok(Self {
             nvml,
+            visible,
             previous_process_ticks: HashMap::new(),
             previous_sample: None,
             clock_ticks_per_second: clock_ticks_per_second(),
@@ -71,15 +80,19 @@ impl Collector {
         let elapsed = self
             .previous_sample
             .map(|previous| sampled_at.saturating_duration_since(previous));
-        let count = self
-            .nvml
-            .device_count()
-            .map_err(|error| error.to_string())?;
+        let indices = match &self.visible {
+            Some(indices) => indices.clone(),
+            None => (0..self
+                .nvml
+                .device_count()
+                .map_err(|error| error.to_string())?)
+                .collect(),
+        };
         let mut snapshot = Snapshot::default();
         let mut identities = HashMap::new();
         let mut cpu_ticks = HashMap::new();
 
-        for index in 0..count {
+        for index in indices {
             let device = match self.nvml.device_by_index(index) {
                 Ok(device) => device,
                 Err(_) => continue,
@@ -171,9 +184,41 @@ impl Collector {
     }
 }
 
+// Resolves CUDA_VISIBLE_DEVICES to NVML indices, which match nvidia-smi. Like
+// CUDA, entries after the first one that names no device are ignored.
+#[cfg(not(target_os = "macos"))]
+fn visible_indices(nvml: &Nvml, value: &str) -> Vec<u32> {
+    let count = nvml.device_count().unwrap_or(0);
+    let uuids: Vec<String> = (0..count)
+        .map(|index| {
+            nvml.device_by_index(index)
+                .and_then(|device| device.uuid())
+                .unwrap_or_default()
+        })
+        .collect();
+    let mut indices = Vec::new();
+    for entry in value.split(',').map(str::trim) {
+        let index = if entry.starts_with("GPU-") {
+            uuids
+                .iter()
+                .position(|uuid| !uuid.is_empty() && uuid.starts_with(entry))
+                .map(|index| index as u32)
+        } else {
+            entry.parse::<u32>().ok().filter(|index| *index < count)
+        };
+        let Some(index) = index else {
+            break;
+        };
+        if !indices.contains(&index) {
+            indices.push(index);
+        }
+    }
+    indices
+}
+
 #[cfg(target_os = "macos")]
 impl Collector {
-    pub fn new() -> Result<Self, String> {
+    pub fn new(_only_visible: bool) -> Result<Self, String> {
         let (sender, samples) = std::sync::mpsc::channel();
         std::thread::spawn(move || {
             let mut sampler = match macmon::Sampler::new() {

@@ -39,7 +39,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     if !options.no_update {
         update::spawn_background_check();
     }
-    let mut collector = Collector::new()?;
+    let mut collector = Collector::new(options.only_visible)?;
     let first = collector.sample()?;
     let mut app = AppState::new();
     app.set_snapshot(first);
@@ -381,21 +381,27 @@ impl Drop for RestoreTerminal {
 struct Options {
     interval_ms: u64,
     no_update: bool,
+    only_visible: bool,
 }
 
 fn parse_args() -> Result<Options, Box<dyn Error>> {
     let mut args = env::args().skip(1);
     let mut interval_ms = DEFAULT_INTERVAL_MS;
-    let mut no_update = env::var("VIGPU_NO_UPDATE").is_ok_and(|value| {
-        !value.is_empty() && !matches!(value.as_str(), "0" | "false" | "no" | "off")
-    });
+    let enabled = |name: &str| {
+        env::var(name).is_ok_and(|value| {
+            !value.is_empty() && !matches!(value.as_str(), "0" | "false" | "no" | "off")
+        })
+    };
+    let mut no_update = enabled("VIGPU_NO_UPDATE");
+    let mut only_visible = enabled("VIGPU_ONLY_VISIBLE");
     while let Some(arg) = args.next() {
         match arg.as_str() {
             "-h" | "--help" => {
-                println!("vigpu — cross-platform GPU monitor for NVIDIA and Apple Silicon\n\nUSAGE\n  vigpu [--interval-ms 250] [--no-update]\n\nOPTIONS\n  --interval-ms N  GPU sampling interval in milliseconds (100–5000; default 250)\n  --no-update      Skip the background update check for this run\n  -h, --help       Show this help\n  -V, --version    Show version\n\nSet VIGPU_NO_UPDATE=1 to disable update checks by default.");
+                println!("vigpu — cross-platform GPU monitor for NVIDIA and Apple Silicon\n\nUSAGE\n  vigpu [--interval-ms 250] [--no-update] [--only-visible]\n\nOPTIONS\n  --interval-ms N  GPU sampling interval in milliseconds (100–5000; default 250)\n  --no-update      Skip the background update check for this run\n  --only-visible   Show only the GPUs in CUDA_VISIBLE_DEVICES and their processes\n  -h, --help       Show this help\n  -V, --version    Show version\n\nSet VIGPU_NO_UPDATE=1 to disable update checks by default.\nSet VIGPU_ONLY_VISIBLE=1 to use --only-visible by default.");
                 std::process::exit(0);
             }
             "--no-update" => no_update = true,
+            "--only-visible" => only_visible = true,
             "-V" | "--version" => {
                 println!("vigpu {}", env!("CARGO_PKG_VERSION"));
                 std::process::exit(0);
@@ -413,6 +419,7 @@ fn parse_args() -> Result<Options, Box<dyn Error>> {
     Ok(Options {
         interval_ms,
         no_update,
+        only_visible,
     })
 }
 
