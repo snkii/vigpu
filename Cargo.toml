@@ -29,7 +29,7 @@ nvml-wrapper = "0.13"
 windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_System_Threading"] }
 
 [target.'cfg(target_os = "macos")'.dependencies]
-macmon = { version = "0.9", default-features = false }
+macmon = { version = "0.10", default-features = false }
 
 [package.metadata.deb]
 section = "utils"
