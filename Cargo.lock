@@ -743,9 +743,9 @@ dependencies = [
 
 [[package]]
 name = "macmon"
-version = "0.10.0"
+version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "16892bfefbb915913960c26ee2f8221fa8cfde8cbbca6e049a986acb5f15d3b2"
+checksum = "bb3dd35e1c2a297e13f95eb579a8d707ddf6cf3aea2f1ddeeae17abcbaaf633d"
 dependencies = [
  "core-foundation",
  "libc",
